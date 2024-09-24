@@ -1,4 +1,7 @@
-#ifndef NONC
+#ifndef GLSL_CANVAS
+# define GLSL_CANVAS 1
+#endif
+#if GLSL_CANVAS == 1
 precision mediump float;
 uniform vec2 u_resolution;
 uniform vec2 u_mouse;

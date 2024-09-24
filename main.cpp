@@ -150,7 +150,7 @@ int main() {
 
     // Fragment Shader source (from file or inline)
     string fragmentShaderSource =  R"(
-		#define NONC
+		#define GLSL_CANVAS 0
 
 		uniform float iTime;
 		uniform vec2 iResolution;

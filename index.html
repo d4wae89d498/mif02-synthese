@@ -80,7 +80,7 @@ async function loadShaderSource(url) {
 	console.log("Shadersource: [" + shaderSource + "]");
 
     return `
-		#define NONC
+		#define GLSL_CANVAS 0
         precision mediump float;
 
         uniform float iTime;
