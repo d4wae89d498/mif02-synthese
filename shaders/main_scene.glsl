@@ -1,6 +1,7 @@
 // Modeling - 2024.09.15
 // Eric Galin
 #include "_common.glsl"
+#line 5
 
 struct Ray{
     vec3 o;// Origin
@@ -26,7 +27,7 @@ struct Val {
 // Compute point on ray
 // ray : The ray
 //   t : Distance
-vec3 Point(Ray ray,float t)
+vec3 RayPoint(Ray ray,float t)
 {
     return ray.o+t*ray.d;
 }
@@ -390,7 +391,7 @@ bool SphereTrace(Ray ray,float e,out float t,out int s,out int c, out Material m
   for(int i=0;i<Steps;i++)
   {
     s=i;
-    vec3 p=Point(ray,t);
+    vec3 p=RayPoint(ray,t);
     Val val=object(p);
     float v=val.v;
     c+=val.c;
@@ -680,7 +681,7 @@ void mainImage(out vec4 color,in vec2 pxy)
   if(hit)
   {
     // Position
-    vec3 p=Point(ray,t);
+    vec3 p=RayPoint(ray,t);
 
     // Compute normal
     vec3 n=ObjectNormal(p);
