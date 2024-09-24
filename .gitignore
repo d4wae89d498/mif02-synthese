@@ -1,0 +1,4 @@
+main
+*.out
+*.swp
+.DS_Store

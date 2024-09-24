@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shader Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+       const canvas = document.getElementById("canvas");
+const gl = canvas.getContext("webgl");
+
+// Resize the canvas to fill the window
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Set viewport
+gl.viewport(0, 0, canvas.width, canvas.height);
+
+// Create a fullscreen quad
+const positions = new Float32Array([
+    -1, -1,
+    1, -1,
+    -1, 1,
+    -1, 1,
+    1, -1,
+    1, 1,
+]);
+
+const positionBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+// Vertex Shader
+const vertexShaderSource = `
+    attribute vec2 a_position;
+    varying vec2 v_texCoord;
+    void main() {
+        gl_Position = vec4(a_position, 0, 1);
+        v_texCoord = a_position * 0.5 + 0.5; // Map to 0.0 to 1.0
+    }
+`;
+
+
+async function replaceAsync(str, regex, asyncFn) {
+    const promises = [];
+    str.replace(regex, (full, ...args) => {
+        promises.push(asyncFn(full, ...args));
+        return full;
+    });
+    const data = await Promise.all(promises);
+    return str.replace(regex, () => data.shift());
+}
+
+
+async function fetchShaderSource(url) {
+	const response = await fetch(url);
+    let shaderSource = await response.text();
+
+    return await replaceAsync(shaderSource, /#include\s+"([^"]+)"/g, async (match, filePath) => {
+        return await fetchShaderSource("shaders/" + filePath);
+    });
+}
+
+
+// Load shader source from an external file
+async function loadShaderSource(url) {
+	const shaderSource = await fetchShaderSource(url);
+
+	console.log("Shadersource: [" + shaderSource + "]");
+
+    return `
+		#define NONC
+        precision mediump float;
+
+        uniform float iTime;
+        uniform vec2 iResolution;
+        uniform vec4 iMouse;
+
+        ${shaderSource}
+
+        void main() {
+            vec4 fragColor;
+            mainImage(fragColor, gl_FragCoord.xy); // Call mainImage with output and coordinates
+            gl_FragColor = fragColor;
+        }
+    `;
+}
+
+// Create and compile a shader
+function createShader(type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+
+    if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        return shader;
+    }
+
+    console.error(`Shader Compilation Error:\n${gl.getShaderInfoLog(shader)}`);
+    gl.deleteShader(shader);
+}
+
+// Create a program from the vertex and fragment shader
+async function createProgram(fragmentShaderUrl) {
+    const fragmentShaderSource = await loadShaderSource(fragmentShaderUrl);
+    const vertexShader = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+    const fragmentShader = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error(`Program Linking Error:\n${gl.getProgramInfoLog(program)}`);
+        gl.deleteProgram(program);
+    }
+
+    return program;
+}
+
+// Mouse tracking
+let mouse = [0, 0];
+let mousePressed = false;
+
+// Update mouse position on mouse move
+canvas.addEventListener('mousemove', (event) => {
+    if (mousePressed) {
+        mouse[0] = event.clientX;
+        mouse[1] = canvas.height - event.clientY; // Invert Y-axis
+    }
+});
+
+// Set mousePressed to true on mouse down
+canvas.addEventListener('mousedown', () => {
+    mousePressed = true;
+});
+
+// Set mousePressed to false on mouse up
+canvas.addEventListener('mouseup', () => {
+    mousePressed = false;
+});
+
+// Main function to initialize and start rendering
+async function main() {
+    const program = await createProgram('shaders/main_scene.glsl');
+    gl.useProgram(program);
+
+    // Get the location of the uniforms
+    const iResolutionLocation = gl.getUniformLocation(program, "iResolution");
+    const iTimeLocation = gl.getUniformLocation(program, "iTime");
+    const iMouseLocation = gl.getUniformLocation(program, "iMouse");
+
+    const positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+    gl.enableVertexAttribArray(positionAttributeLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+    function render() {
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // Set uniform variables
+        gl.uniform2f(iResolutionLocation, canvas.width, canvas.height);
+        gl.uniform1f(iTimeLocation, performance.now() / 1000);
+        gl.uniform4f(iMouseLocation, mouse[0], mouse[1], 0.0, 0.0); // Set mouse position
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        requestAnimationFrame(render);
+    }
+
+    render();
+}
+
+// Start the main function
+main();
+
+    </script>
+</body>
+</html>
