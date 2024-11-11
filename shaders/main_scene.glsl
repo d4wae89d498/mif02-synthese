@@ -3,11 +3,6 @@
 #include "_common.glsl"
 #line 5
 
-// Modeling - 2024.09.15
-// Eric Galin
-
-const float sunSpeed = .50; // Speed factor
-
 struct Ray {
     vec3 o;// Origin
     vec3 d;// Direction
@@ -21,13 +16,35 @@ struct Material {
     float reflectivity; // Facteur de réflexion (0 = mat, 1 = miroir)
 };
 
-
-
 struct Val {
   float v; // Signed distance
   int c; // Cost
   Material mat;  // Matériau au point donné
 };
+
+struct Light {
+    vec3 position;      // Position for point lights
+    vec3 direction;     // Direction for directional lights
+    vec3 color;         // Light color
+    float intensity;    // Light intensity
+    bool isDirectional; // Whether the light is directional
+};
+
+const float sunSpeed = .10; // Speed factor
+vec3 sunPos = vec3(50.0 * sin(iTime * sunSpeed), 10.0, 100.0 * cos(iTime * sunSpeed));
+
+const int numLights = 3; // Nombre de lumières
+Light lights[numLights];
+
+
+void initLights() {
+
+    lights[0] = Light(vec3(10.0, 10.0, 10.0), vec3(0.0), vec3(1.0, 0.9, 0.8), 1.0, false);  // Lumière ponctuelle
+    lights[1] = Light(vec3(0.0), normalize(vec3(-1.0, -1.0, -0.5)), vec3(0.8, 0.8, 1.0), 0.7, true);  // Lumière directionnelle
+    lights[2] = Light(vec3(-10.0, 5.0, -10.0), vec3(0.0), vec3(0.7, 1.0, 0.7), 0.8, false);  // Deuxième lumière ponctuelle
+}
+
+
 
 // Compute point on ray
 // ray : The ray
@@ -37,7 +54,7 @@ vec3 RayPoint(Ray ray,float t)
     return ray.o+t*ray.d;
 }
 
-const float defaultAmbiantFactor = 1.0;
+const float defaultAmbiantFactor = .8;
 
 Material concreteMat = Material(vec3(0.6, 0.6, 0.6), defaultAmbiantFactor, 0.5, 0.1, 0.0);
 
@@ -381,7 +398,7 @@ float Shadow(vec3 p,vec3 n,vec3 l)
   return 0.;
 }
 
-vec3 Shade(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
+vec3 Shade(vec3 p, vec3 n, Ray eye, Material mat)
 {
     // Light direction to point light
     vec3 l = normalize(sunPos - p);
@@ -438,7 +455,7 @@ float AmbientOcclusion(vec3 p, vec3 n)
 // p : Point
 // n : Normal at point
 // eye : Eye direction
-vec3 ShadeWithAO1(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
+vec3 ShadeWithAO1(vec3 p, vec3 n, Ray eye, Material mat)
 {
     // Light direction to point light (using the same sunPos from your original code)
     vec3 l = normalize(sunPos - p);
@@ -447,7 +464,7 @@ vec3 ShadeWithAO1(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
     float ao = AmbientOcclusion(p, n);  // Compute the ambient occlusion
 
     // Call the modified Shade function (now using material properties)
-    vec3 color = Shade(p, n, eye, mat, sunPos);  // This will return color with the lighting components
+    vec3 color = Shade(p, n, eye, mat);  // This will return color with the lighting components
 
     // Combine the result from Shade with ambient occlusion and shadow
     color = color * ao;  // Apply ambient occlusion by scaling the color
@@ -476,29 +493,21 @@ float ModulateOcclusionByLight(vec3 p, vec3 n, vec3 l)
 }
 
 // Helper function to compute lighting based on material and lighting
-vec3 ShadeWithAO2(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
+vec3 ShadeWithAO2(vec3 p, vec3 n, Ray eye, Material mat)
 {
 	vec3 l = normalize(sunPos - p);
-    float ambientOcclusion = ModulateOcclusionByLight(p, n, l);
-    float shadow = Shadow(p, n, l);
+    float ao = ModulateOcclusionByLight(p, n, l);
 
-    // Ambient component
-    vec3 ambient = mat.ambient * mat.color;
+     // Call the modified Shade function (now using material properties)
+    vec3 color = Shade(p, n, eye, mat);  // This will return color with the lighting components
 
-    // Diffuse component
-    vec3 diffuse = mat.diffuse * clamp(dot(n, l), 0.0, 1.0) * mat.color;
-
-    // Specular component
-    vec3 r = reflect(eye.d, n);
-    vec3 specular = mat.specular * pow(clamp(dot(r, l), 0.0, 1.0), 35.0) * vec3(1.0);
-
-    // Combine components with ambient occlusion and shadow
-    vec3 color = (ambient * ambientOcclusion) + shadow * (diffuse + specular);
+    // Combine the result from Shade with ambient occlusion and shadow
+    color = color * ao;  // Apply ambient occlusion by scaling the color
 
     return color;
 }
 
-vec3 TraceReflection(vec3 p, vec3 reflectionDir, float reflectivity, float e, vec3 sunPos)
+vec3 TraceReflection(vec3 p, vec3 reflectionDir, float reflectivity, float e)
 {
     Ray reflectionRay = Ray(p + reflectionDir, reflectionDir);
     float t = 0.0;           // Distance le long du rayon
@@ -518,7 +527,7 @@ vec3 TraceReflection(vec3 p, vec3 reflectionDir, float reflectivity, float e, ve
     }
 }
 
-vec3 TraceReflectionWithShadows(vec3 p, vec3 reflectionDir, float reflectivity, float e, vec3 sunPos)
+vec3 TraceReflectionWithShadows(vec3 p, vec3 reflectionDir, float reflectivity, float e)
 {
     Ray reflectionRay = Ray(p + reflectionDir, reflectionDir);
     float t = 0.0;           // Distance le long du rayon
@@ -533,7 +542,7 @@ vec3 TraceReflectionWithShadows(vec3 p, vec3 reflectionDir, float reflectivity, 
 
 		vec3 hitPos = RayPoint(reflectionRay, t);
         vec3 hitNormal = ObjectNormal(hitPos);
-        reflectedColor = ShadeWithAO2(hitPos, hitNormal, reflectionRay, mat, sunPos);
+        reflectedColor = ShadeWithAO2(hitPos, hitNormal, reflectionRay, mat);
 
 		return reflectedColor * reflectivity;
        // return reflectedColor * reflectivity;
@@ -545,16 +554,16 @@ vec3 TraceReflectionWithShadows(vec3 p, vec3 reflectionDir, float reflectivity, 
 
 
 // Fonction de shading avec Ambient Occlusion et matériaux
-vec3 ShadeWithAO2AndReflection(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
+vec3 ShadeWithAO2AndReflection(vec3 p, vec3 n, Ray eye, Material mat)
 {
 
 
     // Combine l'ambiant, le diffus et le spéculaire avec l'occlusion ambiante
-    vec3 color = ShadeWithAO2(p, n, eye, mat, sunPos);
+    vec3 color = ShadeWithAO2(p, n, eye, mat);
 
     if (mat.reflectivity > 0.0) {
         vec3 reflectionDir = normalize(reflect(eye.d, n) );
-        vec3 reflection = TraceReflection(p, reflectionDir, mat.reflectivity, 1000.0, sunPos);
+        vec3 reflection = TraceReflection(p, reflectionDir, mat.reflectivity, 1000.0);
         color = mix(color, reflection, mat.reflectivity); // Combine la couleur de base avec la réflexion
     }
 
@@ -563,16 +572,16 @@ vec3 ShadeWithAO2AndReflection(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPo
 }
 
 // Fonction de shading avec Ambient Occlusion et matériaux
-vec3 ShadeWithAO2AndReflectionWithShadows(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
+vec3 ShadeWithAO2AndReflectionWithShadows(vec3 p, vec3 n, Ray eye, Material mat)
 {
 
 
     // Combine l'ambiant, le diffus et le spéculaire avec l'occlusion ambiante
-    vec3 color = ShadeWithAO2(p, n, eye, mat, sunPos);
+    vec3 color = ShadeWithAO2(p, n, eye, mat);
 
     if (mat.reflectivity > 0.0) {
         vec3 reflectionDir = normalize(reflect(eye.d, n) );
-        vec3 reflection = TraceReflectionWithShadows(p, reflectionDir, mat.reflectivity, 1000.0, sunPos);
+        vec3 reflection = TraceReflectionWithShadows(p, reflectionDir, mat.reflectivity, 1000.0);
         color = mix(color, reflection, mat.reflectivity); // Combine la couleur de base avec la réflexion
     }
 
@@ -583,10 +592,10 @@ vec3 ShadeWithAO2AndReflectionWithShadows(vec3 p, vec3 n, Ray eye, Material mat,
 const int maxReflections = 5;
 
 
-vec3 ShadeWithAO2AndNestedReflection(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
+vec3 ShadeWithAO2AndNestedReflection(vec3 p, vec3 n, Ray eye, Material mat)
 {
 
-    vec3 color = ShadeWithAO2(p, n, eye, mat, sunPos);
+    vec3 color = ShadeWithAO2(p, n, eye, mat);
 
     if (mat.reflectivity > 0.0) {
         vec3 reflectionDir = normalize(reflect(eye.d, n));
@@ -606,7 +615,7 @@ vec3 ShadeWithAO2AndNestedReflection(vec3 p, vec3 n, Ray eye, Material mat, vec3
 
 			if (hit) {
 
-    			vec3 reflectedColor = ShadeWithAO2(hitPos, hitNormal, reflectionRay, matHit, sunPos);
+    			vec3 reflectedColor = ShadeWithAO2(hitPos, hitNormal, reflectionRay, matHit);
 
 
                 // Mix with accumulated color
@@ -631,8 +640,7 @@ vec3 ShadeWithAO2AndNestedReflection(vec3 p, vec3 n, Ray eye, Material mat, vec3
 void mainImage(out vec4 color,in vec2 pxy)
 {
 
-    vec3 sunPos = vec3(50.0 * sin(iTime * sunSpeed), 10.0, 100.0 * cos(iTime * sunSpeed));
-
+	initLights();
 
   // Convert pixel coordinates
     vec2 pixel=(-iResolution.xy+2.*pxy)/iResolution.y;
@@ -665,7 +673,7 @@ void mainImage(out vec4 color,in vec2 pxy)
     vec3 n=ObjectNormal(p);
 
     // Shade object with light
-    rgb=ShadeWithAO2AndNestedReflection(p,n,ray, mat, sunPos);
+    rgb=ShadeWithAO2(p,n,ray, mat);
 
 
   }
