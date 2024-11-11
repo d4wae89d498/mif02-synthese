@@ -3,7 +3,12 @@
 #include "_common.glsl"
 #line 5
 
-struct Ray{
+// Modeling - 2024.09.15
+// Eric Galin
+
+const float sunSpeed = .50; // Speed factor
+
+struct Ray {
     vec3 o;// Origin
     vec3 d;// Direction
 };
@@ -32,13 +37,21 @@ vec3 RayPoint(Ray ray,float t)
     return ray.o+t*ray.d;
 }
 
+const float defaultAmbiantFactor = 1.0;
 
-Material whiteMat = Material(vec3(1.0, 1.0, 1.0), 0.2, 0.5, 0.1, 0.0);
+Material concreteMat = Material(vec3(0.6, 0.6, 0.6), defaultAmbiantFactor, 0.5, 0.1, 0.0);
 
-Material blueReflective = Material(vec3(1.0, 1.0, 1.0), 0.5, .2, 10.0, .8);
+Material greenMat = Material(vec3(0.1882, 1.0, 0.4471), defaultAmbiantFactor, 0.7, 0.3, 0.0);
 
-Material redMat = Material(vec3(1.0, 0.0, 0.0),  0.2, 0.5, 0.1, 0.0);
+Material cyanMat = Material(vec3(0.0, 0.898, 1.0), defaultAmbiantFactor, 0.7, 0.3, 0.0);
 
+Material orangeMat = Material(vec3(1.0, 0.749, 0.0), defaultAmbiantFactor, 0.7, 0.3, 0.0);
+
+Material purpleMat = Material(vec3(1.0, 0.0, 0.8), defaultAmbiantFactor, 0.7, 0.3, 0.0);
+
+Material mirrorMat = Material(vec3(1.0, 1.0, 1.0), defaultAmbiantFactor, .2, 10.0, .9);
+
+Material rubyMat = Material(vec3(0.9, 0.1, 0.1), defaultAmbiantFactor, 0.7, 0.9, 0.2);
 
 // Camera -------------------------------------------------------------------------------
 
@@ -115,20 +128,6 @@ vec3 RotateZ(vec3 p, float a) {
     float sa = sin(a);
     float ca = cos(a);
     return vec3(ca * p.x - sa * p.y, sa * p.x + ca * p.y, p.z);
-}
-
-// Transform a point with translation, scaling (homothety), and rotation
-// p : the point to transform
-// t : translation vector
-// s : scaling vector (non-uniform scaling possible)
-// r : rotation angles for X, Y, and Z axes (in radians)
-vec3 Transform(vec3 p, vec3 t, vec3 s, vec3 r) {
-    p = Translate(p, t);
-    p = Scale(p, s);
-    p = RotateX(p, r.x);
-    p = RotateY(p, r.y);
-    p = RotateZ(p, r.z);
-    return p;
 }
 
 // Operators -------------------------------------------------------------------------------
@@ -222,93 +221,25 @@ Val Torus(vec3 p, vec3 c, vec2 t, Material mat) {
     return Val(length(vec2(length(q.xz) - t.x, q.y)) - t.y, 3, mat);
 }
 
-
-// Transformed primitives ------------------------------------------------------------
-
-// Transformed Cylinder
-// p : the point in space
-// c : center of the base of the cylinder
-// r : radius of the cylinder
-// h : height of the cylinder
-// t : translation vector
-// s : scaling vector
-// rAngles : rotation angles (x, y, z) in radians
-Val TransformedCylinder(vec3 p, vec3 c, float r, float h, vec3 t, vec3 s, vec3 rAngles) {
-    p = Transform(p, t, s, rAngles);
-    c = Transform(c, t, s, rAngles);
-    return Cylinder(p, c, r, h, whiteMat);
-}
-
-
-// Primitives deformation ------------------------------------------------------------
-
-
-float Noise(vec3 p) {
-    return fract(sin(dot(p, vec3(12.9898, 78.233, 151.7182))) * 43758.5453);
-}
-
-float Turbulence(vec3 p, float scale) {
-    float value = 0.0;
-    float frequency = scale;
-    for (int i = 0; i < 5; i++) {
-        value += Noise(p * frequency) / frequency;
-        frequency *= 2.0; // Increase frequency
-    }
-    return value;
-}
-
-
-Val DeformedPlane(vec3 p, vec3 n, vec3 o) {
-    Val planeVal = Plane(p, n, o, whiteMat);
-    float perturbation = Turbulence(p, 4096.); // Ajuster l'échelle du bruit
-    return Val(planeVal.v + perturbation, planeVal.c, planeVal.mat);
-}
-
-
-Val DeformWithNoise(Val original, vec3 p) {
-    // Appliquer du bruit pour déformer la distance
-    float noiseScale = 0.1; // Échelle du bruit
-    float noise = Noise(p * noiseScale); // Obtenir le bruit
-    float deformation = 10. * noise; // Amplitude de la déformation (ajuster selon les besoins)
-
-    return Val(original.v + deformation, original.c, original.mat);
-}
-
-
-// cost : 40
-vec3 DeformedSphere(vec3 p, float radius) {
-    float deformation = Noise(p * 2.0) * 0.5; // Ajuste l'amplitude de la déformation
-    float distance = length(p) - (radius + deformation);
-    return normalize(p) * (radius + deformation);
-}
-
+// Main object ---------------------------------------------------------------------
 
 // Potential field of the object
 // p : point
 Val object(vec3 p)
 {
-    Val ellipsoid = Ellipsoid(p, vec3(0.0, 2.0, 2.0), vec3(2.0, 3.0, 4.0), whiteMat);
-    Val box = Box(p, vec3(3.0, -8.0, -1.0), vec3(1.0, 1.0, 1.0), whiteMat);
-    Val sphere = Sphere(p, vec3(-4.0, 6.0, -2.0), 4.0, blueReflective);
-    Val sphere2 = Sphere(p, vec3(-9.0, 12.0, -2.0), 2.0, redMat);
+    Val ellipsoid = Ellipsoid(p, vec3(0.0, 2.0, 2.0), vec3(2.0, 3.0, 4.0), concreteMat);
+    Val box = Box(p, vec3(3.0, -8.0, -1.0), vec3(1.0, 1.0, 1.0), purpleMat);
+    Val sphere = Sphere(p, vec3(4.0, -4.0, -2.0), 3.0, mirrorMat);
+    Val sphere2 = Sphere(p, vec3(-2.0, 3.0, -2.0), 2.0, rubyMat);
 
+    Val bsphere = Sphere(p, vec3(4.0, 6.0, -2.0), 1.0, greenMat);
 
-    Val bsphere = Sphere(p, vec3(4.0, 6.0, -2.0), 3.0, whiteMat);
+    Val cylinder = Cylinder(p, vec3(7.0, 0.0, 0.0), 1.0, 2.0, orangeMat);
+    Val capsule = Capsule(p, vec3(0.0, -1.0, 5.5), vec3(0.0, 3.0, 5.5), 0.5, cyanMat);
+    Val torus = Torus(p, vec3(3.0, -8.0, -2.0), vec2(1.5, 0.3), purpleMat);
 
-    Val cylinder = Cylinder(p, vec3(7.0, 0.0, 0.0), 1.0, 2.0, whiteMat);
-    Val capsule = Capsule(p, vec3(0.0, -1.0, 5.5), vec3(0.0, 3.0, 5.5), 0.5, whiteMat);
-    Val torus = Torus(p, vec3(3.0, -8.0, -2.0), vec2(1.5, 0.3), whiteMat);
+	Val vcylinder = Cylinder(RotateX(p, radians(90.)), vec3(7.0, 0.0, 0.0), 1.0, 2.0, orangeMat);
 
-    vec3 translation = vec3(0.0, 0.0, 0.0);  // No translation
-    vec3 scaling = vec3(1.0, 1.0, 1.0);      // No scaling
-    vec3 rotation = vec3(radians(90.0), radians(0.0), 0.0); // Rotate 90 degrees around the Y-axis
-    vec3 cylinderBaseCenter = vec3(7.0, 0.0, 0.0); // Base at origin
-    float cylinderRadius = 1.0; // Radius of the cylinder
-    float cylinderHeight = 2.0;  // Height of the cylinder
-
-    Val vcylinder = TransformedCylinder(p, cylinderBaseCenter, cylinderRadius, cylinderHeight, translation, scaling, rotation);
-
-      bsphere = DeformWithNoise(bsphere, p);
     Val v = Union(bsphere, sphere);
     v = Union(v, sphere2);
     v = Union(v, Intersection(box, torus));
@@ -321,7 +252,16 @@ Val object(vec3 p)
     v = Union(v, vcylinder);
 
 
-    v = Union(v, Plane(p, vec3(0.0, 0.0, 1.0), vec3(0.0, 0.0, -4.0), whiteMat));
+    v = Union(v, Plane(p, vec3(0.0, 0.0, 1.0), vec3(0.0, 0.0, -4.0), concreteMat));
+
+	Val mirror = Box(
+		RotateX(RotateZ(p, radians(90.)), radians(-4.)),
+		vec3(-2., -7.0, -3.0), vec3(13.0, 0.1, 12.0), mirrorMat);
+	//mirror.RotateY(radians(10), mirror);
+    v = Union(
+		v,
+		mirror//Box(p, vec3(3.0, -13.0, -4.0), vec3(10.0, 0.1, 10.0), mirrorMat)//, rotationMatrix(radians(-6.0), vec3(1.0, 0.0, 0.0)))
+		);
 
     return v;
 /*
@@ -422,6 +362,7 @@ vec3 background(Ray ray)
   return mix(vec3(.45,.55,.99),vec3(.65,.69,.99),ray.d.z*.5+.5);
 }
 
+
 // Shadowing
 // p : Point
 // n : Normal
@@ -440,6 +381,30 @@ float Shadow(vec3 p,vec3 n,vec3 l)
   return 0.;
 }
 
+vec3 Shade(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
+{
+    // Light direction to point light
+    vec3 l = normalize(sunPos - p);
+
+    // Ambient component based on material properties
+    vec3 ambient = mat.ambient * mat.color;  // Material ambient color scaled by ambient strength
+
+    // Shadow computation
+    float shadow = Shadow(p, n, l);
+
+    // Phong diffuse component based on material's diffuse property
+    vec3 diffuse = mat.diffuse * clamp(dot(n, l), 0.0, 1.0) * mat.color;
+
+    // Specular component based on material's specular property
+    vec3 r = reflect(eye.d, n);
+    vec3 specular = mat.specular * pow(clamp(dot(r, l), 0.0, 1.0), 35.0) * vec3(1.0);
+
+    // Combine all components: ambient, diffuse, specular, shadow
+    vec3 color = ambient + shadow * (diffuse + specular);
+
+    return color;
+}
+
 
 // Compute ambient occlusion
 // p : Point
@@ -447,7 +412,7 @@ float Shadow(vec3 p,vec3 n,vec3 l)
 float AmbientOcclusion(vec3 p, vec3 n)
 {
     float occlusion = 0.0;
-    const int samples = 16;  // Nombre d'échantillons pour l'occlusion
+    const int samples = 128;  // Nombre d'échantillons pour l'occlusion
     float maxDistance = 5.0;  // Distance maximale de l'occlusion
 
     for (int i = 0; i < samples; i++)
@@ -469,6 +434,28 @@ float AmbientOcclusion(vec3 p, vec3 n)
     return occlusion;
 }
 
+// Shading and lighting
+// p : Point
+// n : Normal at point
+// eye : Eye direction
+vec3 ShadeWithAO1(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
+{
+    // Light direction to point light (using the same sunPos from your original code)
+    vec3 l = normalize(sunPos - p);
+
+    // Compute ambient occlusion
+    float ao = AmbientOcclusion(p, n);  // Compute the ambient occlusion
+
+    // Call the modified Shade function (now using material properties)
+    vec3 color = Shade(p, n, eye, mat, sunPos);  // This will return color with the lighting components
+
+    // Combine the result from Shade with ambient occlusion and shadow
+    color = color * ao;  // Apply ambient occlusion by scaling the color
+
+    return color;
+}
+
+
 // Modulate ambient occlusion based on direct lighting
 // p : Point
 // n : Normal at point
@@ -484,32 +471,72 @@ float ModulateOcclusionByLight(vec3 p, vec3 n, vec3 l)
     // Modulate occlusion based on direct light intensity
     // If the point is fully lit (directLightIntensity ~ 1), reduce the AO
     // If the point is in shadow (directLightIntensity ~ 0), keep the full AO
-    float filteredAO = mix(ao, 1.0, directLightIntensity);  // Réduire AO dans les zones éclairées
+    float filteredAO = mix(ao, 1., directLightIntensity);  // Réduire AO dans les zones éclairées
     return filteredAO;
 }
 
-// Fonction simplifiée pour tracer un rayon réfléchi
-vec3 TraceReflection(vec3 p, vec3 reflectionDir, float reflectivity, float e, int depth)
+// Helper function to compute lighting based on material and lighting
+vec3 ShadeWithAO2(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
 {
-    // Limite la profondeur de récursivité pour éviter les boucles infinies
-    if (depth <= 0) return vec3(0.0); // Retourne noir si on atteint la profondeur maximale
+	vec3 l = normalize(sunPos - p);
+    float ambientOcclusion = ModulateOcclusionByLight(p, n, l);
+    float shadow = Shadow(p, n, l);
 
+    // Ambient component
+    vec3 ambient = mat.ambient * mat.color;
 
-    Ray reflectionRay = Ray(p + reflectionDir * 1.10 /** 0.010*/, reflectionDir * 1.10); // Un petit offset pour éviter l'auto-intersection
+    // Diffuse component
+    vec3 diffuse = mat.diffuse * clamp(dot(n, l), 0.0, 1.0) * mat.color;
+
+    // Specular component
+    vec3 r = reflect(eye.d, n);
+    vec3 specular = mat.specular * pow(clamp(dot(r, l), 0.0, 1.0), 35.0) * vec3(1.0);
+
+    // Combine components with ambient occlusion and shadow
+    vec3 color = (ambient * ambientOcclusion) + shadow * (diffuse + specular);
+
+    return color;
+}
+
+vec3 TraceReflection(vec3 p, vec3 reflectionDir, float reflectivity, float e, vec3 sunPos)
+{
+    Ray reflectionRay = Ray(p + reflectionDir, reflectionDir);
     float t = 0.0;           // Distance le long du rayon
     int s = 0;              // Nombre d'étapes
     int c = 0;              // Compteur de collisions
     Material mat;           // Matériau intersecté
 
-    // Appel de la fonction SphereTrace pour détecter l'intersection
     bool hit = SphereTrace(reflectionRay, e, t, s, c, mat); // e est la distance d'échappement
-
-
-
     if (hit) {
         // Si on a touché un objet, calculez la couleur réfléchie
-        vec3 reflectedColor = mat.color; // Utilisez mat pour obtenir la couleur selon vos besoins
-        return reflectedColor * reflectivity; // Applique le coefficient de réflexion
+        vec3 reflectedColor = mat.color;
+
+        return reflectedColor * reflectivity;
+    } else {
+        // Sinon, retourne la couleur d'arrière-plan
+        return background(reflectionRay);
+    }
+}
+
+vec3 TraceReflectionWithShadows(vec3 p, vec3 reflectionDir, float reflectivity, float e, vec3 sunPos)
+{
+    Ray reflectionRay = Ray(p + reflectionDir, reflectionDir);
+    float t = 0.0;           // Distance le long du rayon
+    int s = 0;              // Nombre d'étapes
+    int c = 0;              // Compteur de collisions
+    Material mat;           // Matériau intersecté
+
+    bool hit = SphereTrace(reflectionRay, e, t, s, c, mat); // e est la distance d'échappement
+    if (hit) {
+        // Si on a touché un objet, calculez la couleur réfléchie
+        vec3 reflectedColor = mat.color;
+
+		vec3 hitPos = RayPoint(reflectionRay, t);
+        vec3 hitNormal = ObjectNormal(hitPos);
+        reflectedColor = ShadeWithAO2(hitPos, hitNormal, reflectionRay, mat, sunPos);
+
+		return reflectedColor * reflectivity;
+       // return reflectedColor * reflectivity;
     } else {
         // Sinon, retourne la couleur d'arrière-plan
         return background(reflectionRay);
@@ -517,97 +544,17 @@ vec3 TraceReflection(vec3 p, vec3 reflectionDir, float reflectivity, float e, in
 }
 
 
-
-// Shading and lighting
-// p : Point
-// n : Normal at point
-// eye : Eye direction
-vec3 ShadeWithAO1(vec3 p, vec3 n, Ray eye, Material mat)
-{
-    // Point light
-    const vec3 lp = vec3(5.0, 10.0, 25.0);
-
-    // Light direction to point light
-    vec3 l = normalize(lp - p);
-
-    // Compute ambient occlusion
-    float ao = AmbientOcclusion(p, n);  // Calculer l'occlusion ambiante
-
-    // Ambient color with occlusion
-    vec3 ambient = (0.25 + 0.25 * background(Ray(p, n))) * ao;
-
-    // Shadow computation
-    float shadow = Shadow(p, n, l);
-
-    // Phong diffuse
-    vec3 diffuse = 0.35 * clamp(dot(n, l), 0.0, 1.0) * mat.color;//vec3(1.0, 1.0, 1.0);
-
-    // Specular
-    vec3 r = reflect(eye.d, n);
-    vec3 specular = 0.15 * pow(clamp(dot(r, l), 0.0, 1.0), 35.0) * vec3(1.0, 1.0, 1.0);
-
-    // Combine ambient, diffuse, and specular components with shadow and occlusion
-    vec3 c = ambient + shadow * (diffuse + specular);
-    return c;
-}
-
-
-// Shading function with ambient occlusion
-// p : Point
-// n : Normal at point
-// eye : Ray from the camera
-vec3 ShadeWithAO2(vec3 p, vec3 n, Ray eye, Material mat)
-{
-    const vec3 lightPos = vec3(5.0, 10.0, 25.0);  // Position de la lumière
-    vec3 l = normalize(lightPos - p);  // Direction de la lumière
-
-    // Calculate ambient occlusion modulated by light
-    float ambientOcclusion = ModulateOcclusionByLight(p, n, l);
-
-    // Compute base lighting (diffuse + specular)
-    vec3 ambient = .25 + .25 * background(Ray(p, n));
-    float shadow = Shadow(p, n, l);
-    vec3 diffuse = .35 * clamp(dot(n, l), 0.0, 1.0) * mat.color;
-    vec3 r = reflect(eye.d, n);
-    vec3 specular = .15 * pow(clamp(dot(r, l), 0.0, 1.0), 35.0) * vec3(1.0, 1.0, 1.0);
-
-    // Combine all with the modulated occlusion
-    vec3 color = ambient * ambientOcclusion + shadow * (diffuse + specular);
-
-    return color;
-}
-
 // Fonction de shading avec Ambient Occlusion et matériaux
-vec3 ShadeWithAO3(vec3 p, vec3 n, Ray eye, Material mat)
+vec3 ShadeWithAO2AndReflection(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
 {
-   // Set up the moving light position
-    const float speed = .005; // Speed factor
-    vec3 lightPos = vec3(50.0 * sin(iTime * speed), 10.0, 100.0 * cos(iTime * speed));
 
-    vec3 l = normalize(lightPos - p);  // Direction de la lumière
-
-    // Calcul de l'occlusion ambiante modulée par la lumière
-    float ambientOcclusion = ModulateOcclusionByLight(p, n, l);
-
-    // Lumière ambiante avec les coefficients de matériau
-    vec3 ambient = mat.ambient * mat.color;//
-
-    // Calcul de l'ombre (si la lumière est bloquée)
-    float shadow = Shadow(p, n, l);
-
-    // Calcul de l'éclairage diffus
-    vec3 diffuse = mat.diffuse * clamp(dot(n, l), 0.0, 1.0) * mat.color;
-
-    // Calcul de la réflexion spéculaire
-    vec3 r = reflect(eye.d, n);
-    vec3 specular = mat.specular * pow(clamp(dot(r, l), 0.0, 1.0), 35.0) * vec3(1.0, 1.0, 1.0);
 
     // Combine l'ambiant, le diffus et le spéculaire avec l'occlusion ambiante
-    vec3 color = (ambient * ambientOcclusion) + shadow * (diffuse + specular);
+    vec3 color = ShadeWithAO2(p, n, eye, mat, sunPos);
 
     if (mat.reflectivity > 0.0) {
-        vec3 reflectionDir = reflect(eye.d, n) * .1;
-        vec3 reflection = TraceReflection(p, reflectionDir, mat.reflectivity, 1000.0, 3); // Profondeur max de 3
+        vec3 reflectionDir = normalize(reflect(eye.d, n) );
+        vec3 reflection = TraceReflection(p, reflectionDir, mat.reflectivity, 1000.0, sunPos);
         color = mix(color, reflection, mat.reflectivity); // Combine la couleur de base avec la réflexion
     }
 
@@ -615,47 +562,78 @@ vec3 ShadeWithAO3(vec3 p, vec3 n, Ray eye, Material mat)
     return color;
 }
 
-
-// Shading and lighting
-//   p : Point
-//   n : Normal at point
-// eye : Eye direction
-vec3 Shade(vec3 p,vec3 n,Ray eye, Material mat)
+// Fonction de shading avec Ambient Occlusion et matériaux
+vec3 ShadeWithAO2AndReflectionWithShadows(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
 {
-  // Point light
-  const vec3 lp=vec3(5.,10.,25.);
 
-  // Light direction to point light
-  vec3 l=normalize(lp-p);
 
-  // Ambient color
-  vec3 ambient=.25+.25*background(Ray(p,n));
+    // Combine l'ambiant, le diffus et le spéculaire avec l'occlusion ambiante
+    vec3 color = ShadeWithAO2(p, n, eye, mat, sunPos);
 
-  // Shadow computation
-  float shadow=Shadow(p,n,l);
+    if (mat.reflectivity > 0.0) {
+        vec3 reflectionDir = normalize(reflect(eye.d, n) );
+        vec3 reflection = TraceReflectionWithShadows(p, reflectionDir, mat.reflectivity, 1000.0, sunPos);
+        color = mix(color, reflection, mat.reflectivity); // Combine la couleur de base avec la réflexion
+    }
 
-  // Phong diffuse
-  vec3 diffuse=.35*clamp(dot(n,l),0.,1.)* mat.color;
 
-  // Specular
-  vec3 r=reflect(eye.d,n);
-  vec3 specular=.15*pow(clamp(dot(r,l),0.,1.),35.)*vec3(1.,1.,1.);
-  vec3 c=ambient+shadow*(diffuse+specular);
-  return c;
+    return color;
 }
 
-// Shading according to the number of steps in sphere tracing
-// n : Number of steps
-vec3 ShadeSteps(int n,int m)
-{
-  float t=float(n)/(float(m));
-  return.5+mix(vec3(.05,.05,.5),vec3(.65,.39,.65),t);
-}
+const int maxReflections = 5;
 
+
+vec3 ShadeWithAO2AndNestedReflection(vec3 p, vec3 n, Ray eye, Material mat, vec3 sunPos)
+{
+
+    vec3 color = ShadeWithAO2(p, n, eye, mat, sunPos);
+
+    if (mat.reflectivity > 0.0) {
+        vec3 reflectionDir = normalize(reflect(eye.d, n));
+        float reflectivity = mat.reflectivity;
+
+        for (int i = 0; i < maxReflections; i++) {
+			// if (reflectivity <= 0.0001)
+			//	break;
+            Ray reflectionRay = Ray(p + reflectionDir, reflectionDir);
+            float t = 0.0;
+            int s = 0, c = 0;
+            Material matHit;
+
+            bool hit = SphereTrace(reflectionRay, 1000.0, t, s, c, matHit);
+              vec3 hitPos = RayPoint(reflectionRay, t);
+                vec3 hitNormal = ObjectNormal(hitPos);
+
+			if (hit) {
+
+    			vec3 reflectedColor = ShadeWithAO2(hitPos, hitNormal, reflectionRay, matHit, sunPos);
+
+
+                // Mix with accumulated color
+                color = mix(color, reflectedColor, reflectivity);
+
+                // Prepare for the next iteration
+                reflectivity *= matHit.reflectivity; // Reduce reflectivity for subsequent bounces
+                reflectionDir = normalize(reflect(reflectionRay.d, hitNormal)); // Update direction for next bounce
+                p = hitPos; // Move position to the hit point for the next reflection bounce
+            } else {
+				color = mix(color, background(reflectionRay), reflectivity);
+
+                break; // Exit if no hit (background reached)
+            }
+        }
+    }
+
+    return color;
+}
 
 // Image
 void mainImage(out vec4 color,in vec2 pxy)
 {
+
+    vec3 sunPos = vec3(50.0 * sin(iTime * sunSpeed), 10.0, 100.0 * cos(iTime * sunSpeed));
+
+
   // Convert pixel coordinates
     vec2 pixel=(-iResolution.xy+2.*pxy)/iResolution.y;
 
@@ -687,15 +665,9 @@ void mainImage(out vec4 color,in vec2 pxy)
     vec3 n=ObjectNormal(p);
 
     // Shade object with light
-    rgb=ShadeWithAO3(p,n,ray, mat);
+    rgb=ShadeWithAO2AndNestedReflection(p,n,ray, mat, sunPos);
 
 
   }
-
-  // Uncomment this line to shade image with false colors representing the number of steps
-  //  rgb=ShadeSteps(s,Steps);
-
-   // Uncomment this line to shade cost
-  //rgb=ShadeSteps(c,500);
   color=vec4(rgb,1.);
 }
